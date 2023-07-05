@@ -14,6 +14,11 @@ Additionally, to assess other possible sensors
 - Cabin temp?
 - air pressures?
 
+# Depemdencies
+LiquidCrystal_I2C - for 16x2 LCD with I2C wiring interface
+OneWire - for use with 1 wire temp sensors
+DallasTemperature - to read temps from 1 wire sensor array
+
 # Phases
 Phase.1
 Simple sketch to connect Arduino Uno R3 to a 16x2 LCD and an 18B20 temperature sensor, with simple logic to send temp to LCD and turn on a warning LED when temp exceeds a threshold (24c)
