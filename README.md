@@ -25,7 +25,7 @@ Phase.3
 Assess best Arduino device and Colour OLED display for purposes
 
 Phase.4
-Working the
+Working through the various sensors listed above and define how they will be displayed and configured (thresholds, etc)
 
 # todo
-get Fritzing working and sketch the wiring diagram for Phase 1
+get Fritzing working and sketch the wiring diagram for Phase 1 and beyond
