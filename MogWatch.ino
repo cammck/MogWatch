@@ -1,4 +1,4 @@
-#include <Wire.h> 
+// #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -6,6 +6,8 @@
 // Data wire is conntec to the Arduino digital pin 4
 #define ONE_WIRE_BUS 4
 #define WARNING_LED 10
+
+int deviceCount = 0;
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -20,6 +22,8 @@ void setup()
 {
   // initialize digital pin 10 as an output for LED warning light
   pinMode(WARNING_LED, OUTPUT);
+
+  DeviceAddress Thermometer;
   
   // Start serial communication for debugging purposes
   Serial.begin(9600);
@@ -33,34 +37,78 @@ void setup()
 	// Turn on the blacklight and print a message.
 	lcd.backlight();
 	lcd.print("- MogWatch -");
+
+  // locate devices on the bus
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  deviceCount = sensors.getDeviceCount();
+  Serial.print(deviceCount, DEC);
+  Serial.println(" devices.");
+
+  // Might need to use addresses for the sensors when there are lots?!?
+  for (int i = 0;  i < deviceCount;  i++)
+  {
+    Serial.print("Sensor ");
+    Serial.print(i+1);
+    Serial.print(" address : ");
+    sensors.getAddress(Thermometer, i);
+    printAddress(Thermometer);
+  }
 }
 
 void loop()
 {
-  float temp;
+  float tempC;
+  int charCol;
+  bool warningLEDon = false;
   
   // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
   sensors.requestTemperatures(); 
 
   // get the temp value in Celcius of the first temp sensor on the one wire bus pin (4)
-  temp = sensors.getTempCByIndex(0);
+  
+  // Display temperature from each sensor
+  for (int i = 0;  i < deviceCount;  i++)
+  {
+    Serial.print("Sensor ");
+    Serial.print(i+1);
+    Serial.print(" : ");
+    tempC = sensors.getTempCByIndex(i);
+    Serial.print(tempC);
+    Serial.print((char)176);//shows degrees character
+    Serial.print("C  |  ");
 
-  // output the temp to the serial/debug console
-  Serial.print("Celsius temperature: ");
-  // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
-  Serial.print(temp); 
+    charCol = i*5;
+    lcd.setCursor(charCol,1);
+    lcd.print(tempC,1); 
+    lcd.print("c"); // degrees character
 
-  // Move the cursor to the 2nd line of the LCD and print the temp with 1 decimal point
-  lcd.setCursor(1,1);
-  lcd.print(temp,1); 
-  lcd.print("c");
+    // Turn on the Warning LED if the temp is greater than 24c
+    if (tempC > 24 && !warningLEDon) {
+      warningLEDon = true;
+    }
+  }
 
-  // Turn on the Warning LED if the temp is greater than 24c
-  if (temp > 24) {
-    // Turn on the High temp LED
+  Serial.println();
+
+  if (warningLEDon) {
+    // Turn on the High temp LED  
     digitalWrite(WARNING_LED, HIGH);
   } else {
     // Turn off the High temp LED
     digitalWrite(WARNING_LED, LOW);
   }
+
+}
+
+void printAddress(DeviceAddress deviceAddress)
+{ 
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    Serial.print("0x");
+    if (deviceAddress[i] < 0x10) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+    if (i < 7) Serial.print(", ");
+  }
+  Serial.println("");
 }
