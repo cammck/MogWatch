@@ -95,53 +95,83 @@ void show_splash(void)
     tft.fillScreen(BLACK);
 }
 
+void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour, char label[3]) {
+  // If the label is not being highlighted draw white box around white text
+  if (!highlightLabel) {
+    tft.fillRect(xloc, yloc, 26, 18, WHITE);
+  }
+  tft.fillRect(xloc+1, yloc+1, 24, 16, BLACK);
+  tft.setCursor(xloc+2, yloc+2);
+  tft.setTextSize(2);
+  if (highlightLabel) {
+    textColour = RED;
+  }
+  tft.setTextColor(textColour);
+  //tft.print(F(label));
+  tft.print(label);
+}
+
+void draw_wheel(int xloc, int yloc, int textBoxOffset, uint16_t tyreColour) {
+  tft.drawRoundRect(xloc, yloc, 16, 46, 4, tyreColour);
+
+  draw_tempLabel(xloc+textBoxOffset, yloc+14, false, WHITE, "--\0");
+}
+
+void draw_diff(int xleftWheel, int xrightWheel, int yloc) {
+  xleftWheel+=30;
+  tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
+  tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc-4, GREEN);
+  tft.drawLine(xleftWheel+9, yloc-4, xleftWheel+15, yloc-4, GREEN); // ??? remove if bottom diff???
+  tft.drawLine(xleftWheel+15, yloc-4, xleftWheel+19, yloc, GREEN);
+  tft.drawLine(xleftWheel+19, yloc, xrightWheel-13, yloc, GREEN);
+
+  yloc+=6;
+  tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
+  tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc+4, GREEN);
+  tft.drawLine(xleftWheel+9, yloc+4, xleftWheel+15, yloc+4, GREEN); // ??? remove if top diff???
+  tft.drawLine(xleftWheel+15, yloc+4, xleftWheel+19, yloc, GREEN);
+  tft.drawLine(xleftWheel+19, yloc, xrightWheel-13, yloc, GREEN);
+}
+
 void draw_mog4x4chasis(void)
 {
   tft.fillScreen(BLACK);
 
-  // Tyre front passenger
-  tft.drawRoundRect(20, 30, 16, 46, 4, GREEN);
-  tft.fillRect(7, 42, 26, 18, GREEN);
-  tft.fillRect(8, 43, 24, 16, BLACK);
-  tft.setCursor(9, 44);
-  tft.setTextSize(2);
-  tft.print(F("60"));
+  draw_wheel(20, 30, 3, GREEN);                     // Tyre front passenger
+  draw_wheel(99, 30, -13, GREEN);                   // Tyre front driver
+  draw_wheel(20, 174, 3, GREEN);                    // Tyre rear passenger
+  draw_wheel(99, 174, -13, GREEN);                  // Tyre rear driver
 
-  // Tyre front driver
-  tft.drawRoundRect(99, 30, 16, 46, 4, GREEN);
-  tft.fillRect(86, 42, 26, 18, GREEN);
-  tft.fillRect(87, 43, 24, 16, BLACK);
-  tft.setCursor(88, 44);
-  tft.setTextSize(2);
-  tft.print(F("60"));
+  draw_diff(20, 99, 50);                            // Front diff
+  draw_diff(20, 99, 194);                           // Rear diff
 
-  // Tyre rear passenger
-  tft.drawRoundRect(20, 174, 16, 46, 4, GREEN);
-  tft.fillRect(7, 186, 26, 18, GREEN);
-  tft.fillRect(8, 187, 24, 16, BLACK);
-  tft.setCursor(9, 188);
-  tft.setTextSize(2);
-  tft.print(F("60"));
+  draw_tempLabel(20, 85, false, WHITE, "--\0");     // front diff Label
+  tft.drawLine(40, 84, 57, 58, WHITE);              // label pointer to front diff
+  draw_tempLabel(20, 150, false, WHITE, "--\0");    // rear diff Label
+  tft.drawLine(40, 169, 57, 192, WHITE);            // label pointer to rear diff
 
-  // Tyre rear driver
-  tft.drawRoundRect(99, 174, 16, 46, 4, GREEN);
-  tft.fillRect(86, 186, 26, 18, GREEN);
-  tft.fillRect(87, 187, 24, 16, BLACK);
-  tft.setCursor(88, 188);
-  tft.setTextSize(2);
-  tft.print(F("60"));
+  // Tail shafts
+  tft.drawRect(59, 60, 6, 131, GREEN);
+  tft.drawRect(60, 60, 4, 131, BLACK);
 
-    tft.drawLine(37, 39, 50, 39, GREEN);
-    tft.drawLine(50, 39, 54, 35, GREEN);
-    tft.drawLine(54, 35, 60, 35, GREEN);
-    tft.drawLine(60, 35, 64, 39, GREEN);
-    tft.drawLine(64, 39, 93, 39, GREEN);
+  // Gearbox
+  tft.drawRect(53, 85, 18, 41, GREEN);
+  tft.drawRect(59, 91, 30, 20, GREEN);
+  tft.fillRect(54, 86, 16, 39, BLACK);
+  tft.fillRect(59, 91, 12, 20, BLACK);
 
-    tft.drawLine(37, 45, 50, 45, GREEN);
-    tft.drawLine(50, 45, 54, 49, GREEN);
-    tft.drawLine(54, 49, 60, 49, GREEN); // remove the outlet to gearbox
-    tft.drawLine(60, 49, 64, 45, GREEN);
-    tft.drawLine(64, 45, 93, 45, GREEN);
+  // Gearbox Label
+  draw_tempLabel(50, 120, false, WHITE, "--\0");
+
+  // Engine
+  tft.drawRect(60, 10, 27, 30, GREEN);
+
+  // Engine Label
+  draw_tempLabel(47, 16, false, WHITE, "--\0");
+
+  // Drive shaft
+  tft.drawRect(74, 40, 6, 53, GREEN);
+  tft.fillRect(75, 40, 4, 52, BLACK);
 
     while (1) {
         tp = ts.getPoint();
