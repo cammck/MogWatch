@@ -107,6 +107,14 @@ void draw_mog4x4chasis(void)
   tft.setTextSize(2);
   tft.print(F("60"));
 
+  // Tyre front driver
+  tft.drawRoundRect(99, 30, 16, 46, 4, GREEN);
+  tft.fillRect(86, 42, 26, 18, GREEN);
+  tft.fillRect(87, 43, 24, 16, BLACK);
+  tft.setCursor(88, 44);
+  tft.setTextSize(2);
+  tft.print(F("60"));
+
   // Tyre rear passenger
   tft.drawRoundRect(20, 174, 16, 46, 4, GREEN);
   tft.fillRect(7, 186, 26, 18, GREEN);
@@ -114,6 +122,26 @@ void draw_mog4x4chasis(void)
   tft.setCursor(9, 188);
   tft.setTextSize(2);
   tft.print(F("60"));
+
+  // Tyre rear driver
+  tft.drawRoundRect(99, 174, 16, 46, 4, GREEN);
+  tft.fillRect(86, 186, 26, 18, GREEN);
+  tft.fillRect(87, 187, 24, 16, BLACK);
+  tft.setCursor(88, 188);
+  tft.setTextSize(2);
+  tft.print(F("60"));
+
+    tft.drawLine(37, 39, 50, 39, GREEN);
+    tft.drawLine(50, 39, 54, 35, GREEN);
+    tft.drawLine(54, 35, 60, 35, GREEN);
+    tft.drawLine(60, 35, 64, 39, GREEN);
+    tft.drawLine(64, 39, 93, 39, GREEN);
+
+    tft.drawLine(37, 45, 50, 45, GREEN);
+    tft.drawLine(50, 45, 54, 49, GREEN);
+    tft.drawLine(54, 49, 60, 49, GREEN); // remove the outlet to gearbox
+    tft.drawLine(60, 49, 64, 45, GREEN);
+    tft.drawLine(64, 45, 93, 45, GREEN);
 
     while (1) {
         tp = ts.getPoint();
