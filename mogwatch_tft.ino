@@ -26,6 +26,7 @@ int deviceCount = 0;
 struct Sensor {
   uint8_t slot;
   // DeviceAddress addr;
+  // unit8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Air = 4 (no warn/alarm)
   char name[10];
   uint8_t warn;
   uint8_t alarm;
