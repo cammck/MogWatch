@@ -7,6 +7,29 @@
 #include <MCUFRIEND_kbv.h>
 MCUFRIEND_kbv tft;       // hard-wired for UNO shields anyway.
 #include <TouchScreen.h>
+#include <EEPROM.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// Data wire is conntec to the Arduino digital pin 4
+#define ONE_WIRE_BUS 4
+#define WARNING_LED 10
+
+int deviceCount = 0;
+
+// Setup a oneWire instance to communicate with any OneWire devices
+//OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature sensor 
+//DallasTemperature sensors(&oneWire);
+
+struct Sensor {
+  uint8_t slot;
+  // DeviceAddress addr;
+  char name[10];
+  uint8_t warn;
+  uint8_t alarm;
+};
 
 //char *name = "Please Calibrate.";  //edit name of shield
 char *name = "2.8 touch tft";
@@ -20,10 +43,19 @@ TSPoint tp;
 
 #define MINPRESSURE 200
 #define MAXPRESSURE 1000
+#define CHASSIS_AREA 120    // This is the area which the chassis is drawn in for touch references
 
-int16_t BOXSIZE;
-int16_t PENRADIUS = 4;
-uint16_t ID, oldcolor, currentcolor;
+int currentDetails = 0;
+#define DISPLAY_ENGINE_DETAILS      1
+#define DISPLAY_FL_PORTAL_DETAILS   2
+#define DISPLAY_FR_PORTAL_DETAILS   3
+#define DISPLAY_F_DIFF_DETAILS      4
+#define DISPLAY_GEARBOX_DETAILS     5
+#define DISPLAY_R_DIFF_DETAILS      6
+#define DISPLAY_RL_PORTAL_DETAILS   7
+#define DISPLAY_RR_PORTAL_DETAILS   8
+
+uint16_t TFT_ID;            // ID to control touch screen TFT
 uint8_t Orientation = 1;    //0=portrait, 1=landscape, 2=other portrait, 3=other landscape
 
 // Assign human-readable names to some common 16-bit color values:
@@ -42,10 +74,9 @@ void show_Serial(void)
     Serial.println(F("But they can be in ANY order"));
     Serial.println(F("e.g. right to left or bottom to top"));
     Serial.println(F("or wrong direction"));
-    Serial.println(F("Edit name and calibration statements\n"));
     Serial.println(name);
     Serial.print(F("ID=0x"));
-    Serial.println(ID, HEX);
+    Serial.println(TFT_ID, HEX);
     Serial.println("Screen is " + String(tft.width()) + "x" + String(tft.height()));
     Serial.println("Calibration is: ");
     Serial.println("LEFT = " + String(TS_LEFT) + " RT  = " + String(TS_RT));
@@ -173,87 +204,223 @@ void draw_mog4x4chasis(void)
   tft.drawRect(74, 40, 6, 53, GREEN);
   tft.fillRect(75, 40, 4, 52, BLACK);
 
-    while (1) {
-        tp = ts.getPoint();
-        pinMode(XM, OUTPUT);
-        pinMode(YP, OUTPUT);
-        delay(100);
-        if (tp.z < MINPRESSURE/4 || tp.z > MAXPRESSURE) continue;
-        if (tp.x > 250 && tp.x < 770  && tp.y > 250 && tp.y < 770) break;
-        // tft.setCursor(0, (tft.height() * 3) / 4);
-        // tft.print("tp.x=" + String(tp.x) + " tp.y=" + String(tp.y) + "   ");
-    }
+  // Label positions y/height for touch selection (start = y and end = y+18):
+  // Engine          10 - 28
+  //      36
+  // Front portals   44 - 62
+  //      74
+  // Front diff      85 - 103
+  //      111
+  // Gearbox        120 - 138
+  //      144
+  // Rear diff      150 - 168
+  //      178
+  // Rear portals   188 - 206
 }
 
-void show_tft(void)
-{
-    tft.setCursor(50, 0);
-    tft.setTextSize(1);
-    tft.print(F("ID=0x"));
-    tft.println(ID, HEX);
-    tft.println("Screen is " + String(tft.width()) + "x" + String(tft.height()));
-    tft.println("");
-    tft.setTextSize(2);
-    tft.println(name);
-    tft.setTextSize(1);
-    tft.println("Values:");
-    tft.println("LEFT = " + String(TS_LEFT) + " RT  = " + String(TS_RT));
-    tft.println("TOP  = " + String(TS_TOP)  + " BOT = " + String(TS_BOT));
-    tft.println("\nWiring is: ");
-    tft.println("YP=" + String(YP)  + " XM=" + String(XM));
-    tft.println("YM=" + String(YM)  + " XP=" + String(XP));
-    tft.setTextSize(2);
-    tft.setTextColor(RED);
-    tft.setCursor((tft.width() - 48) / 2, (tft.height() * 2) / 4);
-    tft.print("EXIT");
-    tft.setTextColor(YELLOW, BLACK);
-    tft.setCursor(0, (tft.height() * 6) / 8);
-    tft.print("Touch screen for loc");
-    while (1) {
-        tp = ts.getPoint();
-        pinMode(XM, OUTPUT);
-        pinMode(YP, OUTPUT);
-        if (tp.z < MINPRESSURE || tp.z > MAXPRESSURE) continue;
-        if (tp.x > 450 && tp.x < 570  && tp.y > 450 && tp.y < 570) break;
-        tft.setCursor(0, (tft.height() * 3) / 4);
-        tft.print("tp.x=" + String(tp.x) + " tp.y=" + String(tp.y) + "   ");
-    }
+void printAddress(DeviceAddress deviceAddress)
+{ 
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    Serial.print("0x");
+    if (deviceAddress[i] < 0x10) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+    if (i < 7) Serial.print(", ");
+  }
+  Serial.println("");
 }
 
+void loadSensorsFromEEPROM(void) {
+  int eeAddress = 0;
+  uint8_t numSensors;
+
+  struct Sensor sensor;
+
+  // Reset EEProm
+  numSensors = 0;
+  // EEPROM.put(eeAddress, numSensors);
+
+  EEPROM.get(eeAddress, numSensors);
+
+  if (numSensors == 0) {
+    Serial.println("No EEProm sensors recorded");
+
+    // add one for testing purposes
+    numSensors = 1;
+    EEPROM.put(eeAddress, numSensors);
+
+    eeAddress += sizeof(numSensors);
+    // DeviceAddress dummyDevAddr;
+    // DeviceAddress newAddress = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
+    // for (int i = 0; i < 8; i++) dummyDevAddr[i] = newAddress[i];
+    
+    // DeviceAddress dummyDevAddr = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
+
+    // sensor = (Sensor){1, dummyDevAddr, "SENSOR123\0", 50, 70};
+    sensor = (Sensor){1, "SENSOR123\0", 50, 70};
+
+    EEPROM.put(eeAddress, sensor);
+  } else {
+    Serial.println(String(numSensors)  + " EEProm sensors recorded");
+
+    eeAddress += sizeof(numSensors);
+    EEPROM.get(eeAddress, sensor);
+    Serial.print(String(sensor.slot)  + " " + sensor.name + " " + sensor.warn + " " + sensor.alarm);
+    // printAddress(sensor.addr);
+  }
+
+}
 
 void setup(void)
 {
     uint16_t tmp;
 
     tft.reset();
-    ID = tft.readID();
-    tft.begin(ID);
+    TFT_ID = tft.readID();
+    tft.begin(TFT_ID);
     tft.setRotation(Orientation);
     tft.fillScreen(BLACK);
 
     Serial.begin(9600);
     show_Serial();
+    loadSensorsFromEEPROM();
 
     //show_splash();
-    //show_tft();
     draw_mog4x4chasis();
+}
 
-    BOXSIZE = tft.width() / 6;
-    tft.fillScreen(BLACK);
+void mapXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
+  // most mcufriend have touch (with icons) that extends below the TFT
+  // screens without icons need to reserve a space for "erase"
+  // scale the ADC values from ts.getPoint() to screen values e.g. 0-239
+  //
+  // Calibration is true for PORTRAIT. tp.y is always long dimension 
+  // map to your current pixel orientation
 
-    tft.fillRect(0, 0, BOXSIZE, BOXSIZE, RED);
-    tft.fillRect(BOXSIZE, 0, BOXSIZE, BOXSIZE, YELLOW);
-    tft.fillRect(BOXSIZE * 2, 0, BOXSIZE, BOXSIZE, GREEN);
-    tft.fillRect(BOXSIZE * 3, 0, BOXSIZE, BOXSIZE, CYAN);
-    tft.fillRect(BOXSIZE * 4, 0, BOXSIZE, BOXSIZE, BLUE);
-    tft.fillRect(BOXSIZE * 5, 0, BOXSIZE, BOXSIZE, MAGENTA);
+  // convert the values of X and Y from the touch to a 0-320 and 0-240 value (or vice versa)
+  // based on the screen orientation and the calibration settings
+/*  switch (Orientation) {
+    case 0:
+      *mapx = map(touchX, TS_LEFT, TS_RT, 0, tft.width());
+      *mapy = map(touchY, TS_TOP, TS_BOT, 0, tft.height());
+      break;
+    case 1:*/
+      // Hard coded to landscape orientation for the moment
+      *mapx = map(touchY, TS_TOP, TS_BOT, 0, tft.width());
+      *mapy = map(touchX, TS_RT, TS_LEFT, 0, tft.height());
+/*      break;
+    case 2:
+      *mapx = map(touchX, TS_RT, TS_LEFT, 0, tft.width());
+      *mapy = map(touchY, TS_BOT, TS_TOP, 0, tft.height());
+      break;
+    case 3:
+      *mapx = map(touchY, TS_BOT, TS_TOP, 0, tft.width());
+      *mapy = map(touchX, TS_LEFT, TS_RT, 0, tft.height());
+      break;
+  }*/
+  Serial.println("x  = " + String(*mapx)  + " y = " + String(*mapy));
+}
 
-    tft.drawRect(0, 0, BOXSIZE, BOXSIZE, WHITE);
-    currentcolor = RED;
-    delay(1000);
+void showDetails(int detailSummary) {
+  if (currentDetails !=  detailSummary) {
+    // clear the area where the text will be displayed
+    tft.fillRect(120, 80, 240, 40, RED);
+
+    currentDetails = detailSummary;
+
+    tft.setTextSize(2);
+    tft.setCursor(130, (tft.height() * 2) / 5);
+    tft.setTextColor(GREEN);
+
+    switch (detailSummary) {
+      case DISPLAY_ENGINE_DETAILS:
+        tft.println("Engine Temp");
+        break;
+      case DISPLAY_FL_PORTAL_DETAILS:
+        tft.println("FL Portal Temp");
+        break;
+      case DISPLAY_FR_PORTAL_DETAILS:
+        tft.println("FR Portal Temp");
+        break;
+      case DISPLAY_F_DIFF_DETAILS:
+        tft.println("Front Diff Temp");
+        break;
+      case DISPLAY_GEARBOX_DETAILS:
+        tft.println("Gearbox Temp");
+        break;
+      case DISPLAY_R_DIFF_DETAILS:
+        tft.println("Rear Diff Temp");
+        break;
+      case DISPLAY_RL_PORTAL_DETAILS:
+        tft.println("RL Portal Temp");
+        break;
+      case DISPLAY_RR_PORTAL_DETAILS:
+        tft.println("RR Portal Temp");
+        break;
+    }
+  }
 }
 
 void loop()
+{
+    uint16_t xpos, ypos;  //screen coordinates
+    int detailArea = 0;
+    tp = ts.getPoint();   //tp.x, tp.y are ADC values
+
+    // if sharing pins, you'll need to fix the directions of the touchscreen pins
+    pinMode(XM, OUTPUT);
+    pinMode(YP, OUTPUT);
+    // we have some minimum pressure we consider 'valid'
+    // pressure of 0 means no pressing!
+
+    if (tp.z > MINPRESSURE && tp.z < MAXPRESSURE) {
+      // Map touch values for X and Y to calibrated X and Y values for this orientation
+      mapXYvalues(tp.x, tp.y, &xpos, &ypos);
+
+      // Check where the touch was
+      if (xpos < CHASSIS_AREA) {                                     // TODO: work out the chasis touch area and define in variable
+          // this is within the chasis touch area
+
+          if (ypos < 36) {
+            // Engine Area
+            detailArea = DISPLAY_ENGINE_DETAILS;
+          } else if (ypos < 74) {
+            // Front Portal Area
+            if (xpos < CHASSIS_AREA/2) {  
+              detailArea = DISPLAY_FL_PORTAL_DETAILS;
+            } else {
+              detailArea = DISPLAY_FR_PORTAL_DETAILS;
+            }
+          } else if (ypos < 111) {
+            // Front Diff Area
+            detailArea = DISPLAY_F_DIFF_DETAILS;
+          } else if (ypos < 144) {
+            // Gearbox Area
+            detailArea = DISPLAY_GEARBOX_DETAILS;
+          } else if (ypos < 178) {
+            // Rear Diff Area
+            detailArea = DISPLAY_R_DIFF_DETAILS;
+          } else {
+            // Rear Portal Area
+            if (xpos < CHASSIS_AREA/2) {  
+              detailArea = DISPLAY_RL_PORTAL_DETAILS;
+            } else {
+              detailArea = DISPLAY_RR_PORTAL_DETAILS;
+            }
+          }
+          showDetails(detailArea);
+        } else {
+          // this is the details area
+          tft.setTextSize(3);
+          tft.setCursor(((tft.width() - 120) / 4) * 3, (tft.height() * 2) / 5);
+          tft.setTextColor(GREEN);
+          tft.println("MogWatch");
+        }
+
+    }
+}
+
+/*void old_loop()
 {
     uint16_t xpos, ypos;  //screen coordinates
     tp = ts.getPoint();   //tp.x, tp.y are ADC values
@@ -336,5 +503,43 @@ void loop()
             tft.fillRect(0, BOXSIZE, tft.width(), tft.height() - BOXSIZE, BLACK);
         }
     }
-}
+}*/
+
+
+
+// old code
+/*void show_tft(void)
+{
+    tft.setCursor(50, 0);
+    tft.setTextSize(1);
+    tft.print(F("ID=0x"));
+    tft.println(ID, HEX);
+    tft.println("Screen is " + String(tft.width()) + "x" + String(tft.height()));
+    tft.println("");
+    tft.setTextSize(2);
+    tft.println(name);
+    tft.setTextSize(1);
+    tft.println("Values:");
+    tft.println("LEFT = " + String(TS_LEFT) + " RT  = " + String(TS_RT));
+    tft.println("TOP  = " + String(TS_TOP)  + " BOT = " + String(TS_BOT));
+    tft.println("\nWiring is: ");
+    tft.println("YP=" + String(YP)  + " XM=" + String(XM));
+    tft.println("YM=" + String(YM)  + " XP=" + String(XP));
+    tft.setTextSize(2);
+    tft.setTextColor(RED);
+    tft.setCursor((tft.width() - 48) / 2, (tft.height() * 2) / 4);
+    tft.print("EXIT");
+    tft.setTextColor(YELLOW, BLACK);
+    tft.setCursor(0, (tft.height() * 6) / 8);
+    tft.print("Touch screen for loc");
+    while (1) {
+        tp = ts.getPoint();
+        pinMode(XM, OUTPUT);
+        pinMode(YP, OUTPUT);
+        if (tp.z < MINPRESSURE || tp.z > MAXPRESSURE) continue;
+        if (tp.x > 450 && tp.x < 570  && tp.y > 450 && tp.y < 570) break;
+        tft.setCursor(0, (tft.height() * 3) / 4);
+        tft.print("tp.x=" + String(tp.x) + " tp.y=" + String(tp.y) + "   ");
+    }
+}*/
 
