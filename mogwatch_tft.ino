@@ -70,7 +70,7 @@ int currentDetails = 0;
 #define DISPLAY_RL_PORTAL_DETAILS   7
 #define DISPLAY_RR_PORTAL_DETAILS   8
 #define DISPLAY_CABIN_DETAILS       9
-#deinfe DISPLAY_AMBIENT_DETAILS     10
+#define DISPLAY_AMBIENT_DETAILS     10
 
 uint16_t TFT_ID;            // ID to control touch screen TFT
 uint8_t Orientation = 1;    //0=portrait, 1=landscape, 2=other portrait, 3=other landscape
@@ -136,8 +136,6 @@ void show_splash(void)
         delay(100);
         if (tp.z < MINPRESSURE/4 || tp.z > MAXPRESSURE) continue;
         if (tp.x > 250 && tp.x < 770  && tp.y > 250 && tp.y < 770) break;
-        // tft.setCursor(0, (tft.height() * 3) / 4);
-        // tft.print("tp.x=" + String(tp.x) + " tp.y=" + String(tp.y) + "   ");
     }
 
     tft.fillScreen(BLACK);
