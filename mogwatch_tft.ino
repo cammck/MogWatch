@@ -18,19 +18,31 @@ MCUFRIEND_kbv tft;       // hard-wired for UNO shields anyway.
 int deviceCount = 0;
 
 // Setup a oneWire instance to communicate with any OneWire devices
-//OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(ONE_WIRE_BUS);
 
 // Pass our oneWire reference to Dallas Temperature sensor 
-//DallasTemperature sensors(&oneWire);
+DallasTemperature sensors(&oneWire);
 
 struct Sensor {
   uint8_t slot;
   // DeviceAddress addr;
-  // unit8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Air = 4 (no warn/alarm)
+  // unit8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
   char name[10];
   uint8_t warn;
   uint8_t alarm;
+  bool relativeToAmbient; // allows warn and alarm thresholds to be set relative to ambient temp (for portals/Diffs/engine/gearbox?)
 };
+// https://forum.expeditionportal.com/threads/unimog-hub-temperatures.191531/ (Reference for portals ambient + 20c)
+
+// The different components that Temperature Sensors can monitor
+#define PORTAL    1 // Front Left, Front Right, Rear Left & Rear Right - should be relative to ambient temp
+#define ENGINE    2 // should NOT be relative to ambient temp???
+#define GEARBOX   3 // should be relative to ambient temp
+#define DIFF      4 // Front & Rear (& Rear2 for 6wd varient) - should be relative to ambient temp
+#define AIR       5 // Cabin & Ambient - should not have warn or alarm levels set by default
+
+// Default config for the various component sensors
+
 
 //char *name = "Please Calibrate.";  //edit name of shield
 char *name = "2.8 touch tft";
@@ -42,12 +54,14 @@ const int TS_LEFT=891,TS_RT=131,TS_TOP=99,TS_BOT=894;
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 TSPoint tp;
 
+// Touch screen senitivity
 #define MINPRESSURE 200
 #define MAXPRESSURE 1000
+
 #define CHASSIS_AREA 120    // This is the area which the chassis is drawn in for touch references
 
 int currentDetails = 0;
-#define DISPLAY_ENGINE_DETAILS      1
+#define DISPLAY_ENGINE_DETAILS      1      // probably should change to SENSOR_ENGINE
 #define DISPLAY_FL_PORTAL_DETAILS   2
 #define DISPLAY_FR_PORTAL_DETAILS   3
 #define DISPLAY_F_DIFF_DETAILS      4
@@ -55,6 +69,8 @@ int currentDetails = 0;
 #define DISPLAY_R_DIFF_DETAILS      6
 #define DISPLAY_RL_PORTAL_DETAILS   7
 #define DISPLAY_RR_PORTAL_DETAILS   8
+#define DISPLAY_CABIN_DETAILS       9
+#deinfe DISPLAY_AMBIENT_DETAILS     10
 
 uint16_t TFT_ID;            // ID to control touch screen TFT
 uint8_t Orientation = 1;    //0=portrait, 1=landscape, 2=other portrait, 3=other landscape
@@ -272,6 +288,33 @@ void loadSensorsFromEEPROM(void) {
 
 }
 
+void setupTempSensors(void) {
+  // initialize digital pin 10 as an output for LED warning light
+  pinMode(WARNING_LED, OUTPUT);
+
+  DeviceAddress Thermometer;
+  
+  // Start up the DallasTemp library
+  sensors.begin();
+
+  // locate devices on the bus
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  deviceCount = sensors.getDeviceCount();
+  Serial.print(deviceCount, DEC);
+  Serial.println(" devices.");
+
+  // Might need to use addresses for the sensors when there are lots?!?
+  for (int i = 0;  i < deviceCount;  i++)
+  {
+    Serial.print("Sensor ");
+    Serial.print(i+1);
+    Serial.print(" address : ");
+    sensors.getAddress(Thermometer, i);
+    printAddress(Thermometer);
+  }
+}
+
 void setup(void)
 {
     uint16_t tmp;
@@ -284,6 +327,7 @@ void setup(void)
 
     Serial.begin(9600);
     show_Serial();
+    setup_TempSensors();
     loadSensorsFromEEPROM();
 
     //show_splash();
@@ -306,7 +350,12 @@ void mapXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
       *mapy = map(touchY, TS_TOP, TS_BOT, 0, tft.height());
       break;
     case 1:*/
+      //
+      //
+      // Remove commented sections to be able to change orientation
       // Hard coded to landscape orientation for the moment
+      //
+      //
       *mapx = map(touchY, TS_TOP, TS_BOT, 0, tft.width());
       *mapy = map(touchX, TS_RT, TS_LEFT, 0, tft.height());
 /*      break;
@@ -322,10 +371,10 @@ void mapXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
   Serial.println("x  = " + String(*mapx)  + " y = " + String(*mapy));
 }
 
-void showDetails(int detailSummary) {
+void showDetails(int detailSummary, float displayTemp) {
   if (currentDetails !=  detailSummary) {
     // clear the area where the text will be displayed
-    tft.fillRect(120, 80, 240, 40, RED);
+    tft.fillRect(120, 80, 240, 80, RED);
 
     currentDetails = detailSummary;
 
@@ -359,7 +408,45 @@ void showDetails(int detailSummary) {
         tft.println("RR Portal Temp");
         break;
     }
+
+    tft.setCursor(130, (tft.height() * 2) / 3);
+    tft.println(displayTemp);
   }
+}
+
+float getTemps(void) {
+  float tempC;
+  bool warningLEDon = false;
+
+  // Display temperature from each sensor
+  for (int i = 0;  i < deviceCount;  i++)
+  {
+    Serial.print("Sensor ");
+    Serial.print(i+1);
+    Serial.print(" : ");
+    sensors.getAddress(Thermometer, i);
+    tempC = sensors.getTempCByIndex(i);
+    Serial.print(tempC);
+    Serial.print((char)176);//shows degrees character
+    Serial.print("C  |  ");
+
+    // Turn on the Warning LED if the temp is greater than 24c
+    if (tempC > 24 && !warningLEDon) {
+      warningLEDon = true;
+    }
+  }
+
+  Serial.println();
+
+  if (warningLEDon) {
+    // Turn on the High temp LED  
+    digitalWrite(WARNING_LED, HIGH);
+  } else {
+    // Turn off the High temp LED
+    digitalWrite(WARNING_LED, LOW);
+  }
+
+  return tempC;
 }
 
 void loop()
@@ -367,6 +454,9 @@ void loop()
     uint16_t xpos, ypos;  //screen coordinates
     int detailArea = 0;
     tp = ts.getPoint();   //tp.x, tp.y are ADC values
+    float aTemp;
+
+    aTemp = getTemps();
 
     // if sharing pins, you'll need to fix the directions of the touchscreen pins
     pinMode(XM, OUTPUT);
@@ -409,7 +499,7 @@ void loop()
               detailArea = DISPLAY_RR_PORTAL_DETAILS;
             }
           }
-          showDetails(detailArea);
+          showDetails(detailArea, aTemp);
         } else {
           // this is the details area
           tft.setTextSize(3);
@@ -544,3 +634,5 @@ void loop()
     }
 }*/
 
+// Other sensors reference:
+// GPS/Speedo - https://how2electronics.com/diy-speedometer-using-gps-module-arduino-oled/
