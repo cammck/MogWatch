@@ -12,10 +12,12 @@ MCUFRIEND_kbv tft;       // hard-wired for UNO shields anyway.
 #include <DallasTemperature.h>
 
 // Data wire is conntec to the Arduino digital pin 4
-#define ONE_WIRE_BUS 4
-#define WARNING_LED 10
+#define ONE_WIRE_BUS 22
+#define WARNING_LED 23
 
 int deviceCount = 0;
+DeviceAddress Thermometer;
+unsigned long time; 
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -25,8 +27,8 @@ DallasTemperature sensors(&oneWire);
 
 struct Sensor {
   uint8_t slot;
-  // DeviceAddress addr;
-  // unit8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
+  DeviceAddress addr;
+  uint8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
   char name[10];
   uint8_t warn;
   uint8_t alarm;
@@ -49,13 +51,13 @@ char *name = "2.8 touch tft";
 // const int XP=6,XM=A2,YP=A1,YM=7; //ID=0x9341
 //const int TS_LEFT=907,TS_RT=136,TS_TOP=942,TS_BOT=139;
 const int XP=8,XM=A2,YP=A3,YM=9; //240x320 ID=0x9595
-const int TS_LEFT=891,TS_RT=131,TS_TOP=99,TS_BOT=894;
+const int TS_LEFT=908,TS_RT=119,TS_TOP=92,TS_BOT=888;
 
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 TSPoint tp;
 
 // Touch screen senitivity
-#define MINPRESSURE 200
+#define MINPRESSURE 50     // 200
 #define MAXPRESSURE 1000
 
 #define CHASSIS_AREA 120    // This is the area which the chassis is drawn in for touch references
@@ -71,6 +73,17 @@ int currentDetails = 0;
 #define DISPLAY_RR_PORTAL_DETAILS   8
 #define DISPLAY_CABIN_DETAILS       9
 #define DISPLAY_AMBIENT_DETAILS     10
+#define DISPLAY_TYRE_DETAILS        11
+#define DISPLAY_FRONT_IMTERMEDIATE_TRANSFER_CASE_DETAILS    12
+#define DISPLAY_REAR_IMTERMEDIATE_TRANSFER_CASE_DETAILS     13
+#define DISPLAY_CLUTCH_DISPLAY      14
+#define DISPLAY_FLF_BRAKE_CALIPER   15
+#define DISPLAY_FLR_BRAKE_CALIPER   16
+#define DISPLAY_FRF_BRAKE_CALIPER   17
+#define DISPLAY_FRR_BRAKE_CALIPER   18
+#define DISPLAY_RL_BRAKE_CALIPER    19
+#define DISPLAY_RR_BRAKE_CALIPER    20
+
 
 uint16_t TFT_ID;            // ID to control touch screen TFT
 uint8_t Orientation = 1;    //0=portrait, 1=landscape, 2=other portrait, 3=other landscape
@@ -165,6 +178,8 @@ void draw_wheel(int xloc, int yloc, int textBoxOffset, uint16_t tyreColour) {
 
 void draw_diff(int xleftWheel, int xrightWheel, int yloc) {
   xleftWheel+=30;
+
+  //.  __/-\___ shape
   tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
   tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc-4, GREEN);
   tft.drawLine(xleftWheel+9, yloc-4, xleftWheel+15, yloc-4, GREEN); // ??? remove if bottom diff???
@@ -172,6 +187,7 @@ void draw_diff(int xleftWheel, int xrightWheel, int yloc) {
   tft.drawLine(xleftWheel+19, yloc, xrightWheel-13, yloc, GREEN);
 
   yloc+=6;
+  //.  --\_/--- shape
   tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
   tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc+4, GREEN);
   tft.drawLine(xleftWheel+9, yloc+4, xleftWheel+15, yloc+4, GREEN); // ??? remove if top diff???
@@ -251,6 +267,17 @@ void loadSensorsFromEEPROM(void) {
 
   struct Sensor sensor;
 
+  // Start up the DallasTemp library
+  sensors.begin();
+
+  // locate devices on the bus
+  deviceCount = sensors.getDeviceCount();
+
+  // Might need to use addresses for the sensors when there are lots?!?
+  for (int i = 0;  i < deviceCount;  i++) {
+    sensors.getAddress(Thermometer, i);
+  }
+
   // Reset EEProm
   numSensors = 0;
   // EEPROM.put(eeAddress, numSensors);
@@ -290,7 +317,7 @@ void setupTempSensors(void) {
   // initialize digital pin 10 as an output for LED warning light
   pinMode(WARNING_LED, OUTPUT);
 
-  DeviceAddress Thermometer;
+  // DeviceAddress Thermometer;
   
   // Start up the DallasTemp library
   sensors.begin();
@@ -315,7 +342,7 @@ void setupTempSensors(void) {
 
 void setup(void)
 {
-    uint16_t tmp;
+    // uint16_t tmp;
 
     tft.reset();
     TFT_ID = tft.readID();
@@ -325,54 +352,26 @@ void setup(void)
 
     Serial.begin(9600);
     show_Serial();
-    setup_TempSensors();
+    setupTempSensors();
     loadSensorsFromEEPROM();
 
-    //show_splash();
+    // show_splash();
     draw_mog4x4chasis();
 }
 
-void mapXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
-  // most mcufriend have touch (with icons) that extends below the TFT
-  // screens without icons need to reserve a space for "erase"
-  // scale the ADC values from ts.getPoint() to screen values e.g. 0-239
-  //
-  // Calibration is true for PORTRAIT. tp.y is always long dimension 
-  // map to your current pixel orientation
-
-  // convert the values of X and Y from the touch to a 0-320 and 0-240 value (or vice versa)
-  // based on the screen orientation and the calibration settings
-/*  switch (Orientation) {
-    case 0:
-      *mapx = map(touchX, TS_LEFT, TS_RT, 0, tft.width());
-      *mapy = map(touchY, TS_TOP, TS_BOT, 0, tft.height());
-      break;
-    case 1:*/
-      //
-      //
-      // Remove commented sections to be able to change orientation
-      // Hard coded to landscape orientation for the moment
-      //
-      //
-      *mapx = map(touchY, TS_TOP, TS_BOT, 0, tft.width());
-      *mapy = map(touchX, TS_RT, TS_LEFT, 0, tft.height());
-/*      break;
-    case 2:
-      *mapx = map(touchX, TS_RT, TS_LEFT, 0, tft.width());
-      *mapy = map(touchY, TS_BOT, TS_TOP, 0, tft.height());
-      break;
-    case 3:
-      *mapx = map(touchY, TS_BOT, TS_TOP, 0, tft.width());
-      *mapy = map(touchX, TS_LEFT, TS_RT, 0, tft.height());
-      break;
-  }*/
+void mapLandscapeXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
+  // See commented function mapXYvalues at end of file for other orientations
+  *mapx = map(touchY, TS_TOP, TS_BOT, 0, tft.width());
+  *mapy = map(touchX, TS_RT, TS_LEFT, 0, tft.height());
   Serial.println("x  = " + String(*mapx)  + " y = " + String(*mapy));
 }
 
 void showDetails(int detailSummary, float displayTemp) {
+  Serial.println("x  = " + String(detailSummary));
+  Serial.println("x  = " + String(currentDetails));
   if (currentDetails !=  detailSummary) {
     // clear the area where the text will be displayed
-    tft.fillRect(120, 80, 240, 80, RED);
+    tft.fillRect(120, 80, 240, 80, BLACK);
 
     currentDetails = detailSummary;
 
@@ -408,7 +407,7 @@ void showDetails(int detailSummary, float displayTemp) {
     }
 
     tft.setCursor(130, (tft.height() * 2) / 3);
-    tft.println(displayTemp);
+    tft.println(displayTemp,0);
   }
 }
 
@@ -416,17 +415,28 @@ float getTemps(void) {
   float tempC;
   bool warningLEDon = false;
 
+   Serial.print("Time1:"); time = millis(); Serial.println(time); 
+
+    // if sharing pins, you'll need to fix the directions of the touchscreen pins
+    // pinMode(XM, OUTPUT);
+    // pinMode(YP, OUTPUT);
+
+    // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
+  sensors.requestTemperatures(); 
+
+  // Serial.print("TimerT:"); time = millis();Serial.println(time); 
+
   // Display temperature from each sensor
   for (int i = 0;  i < deviceCount;  i++)
   {
+      // Serial.print("TimeS:"); time = millis();Serial.println(time); 
     Serial.print("Sensor ");
     Serial.print(i+1);
     Serial.print(" : ");
     sensors.getAddress(Thermometer, i);
     tempC = sensors.getTempCByIndex(i);
-    Serial.print(tempC);
-    Serial.print((char)176);//shows degrees character
-    Serial.print("C  |  ");
+    Serial.print(tempC,1);
+    Serial.print("c  |  ");
 
     // Turn on the Warning LED if the temp is greater than 24c
     if (tempC > 24 && !warningLEDon) {
@@ -434,7 +444,9 @@ float getTemps(void) {
     }
   }
 
-  Serial.println();
+  Serial.print("Time3:"); time = millis();Serial.println(time); 
+
+  // Serial.println();
 
   if (warningLEDon) {
     // Turn on the High temp LED  
@@ -451,20 +463,26 @@ void loop()
 {
     uint16_t xpos, ypos;  //screen coordinates
     int detailArea = 0;
-    tp = ts.getPoint();   //tp.x, tp.y are ADC values
-    float aTemp;
+  
+    float aTemp = 0;
 
+    // modify loop to get temps less frequently - every 5-10 seconds
     aTemp = getTemps();
 
-    // if sharing pins, you'll need to fix the directions of the touchscreen pins
+    tp = ts.getPoint();   //tp.x, tp.y are ADC values
+
+        // if sharing pins, you'll need to fix the directions of the touchscreen pins
     pinMode(XM, OUTPUT);
     pinMode(YP, OUTPUT);
+
     // we have some minimum pressure we consider 'valid'
     // pressure of 0 means no pressing!
 
+    // Serial.println("z  = " + String(tp.z));
+            
     if (tp.z > MINPRESSURE && tp.z < MAXPRESSURE) {
       // Map touch values for X and Y to calibrated X and Y values for this orientation
-      mapXYvalues(tp.x, tp.y, &xpos, &ypos);
+      mapLandscapeXYvalues(tp.x, tp.y, &xpos, &ypos);
 
       // Check where the touch was
       if (xpos < CHASSIS_AREA) {                                     // TODO: work out the chasis touch area and define in variable
@@ -505,7 +523,6 @@ void loop()
           tft.setTextColor(GREEN);
           tft.println("MogWatch");
         }
-
     }
 }
 
@@ -631,6 +648,43 @@ void loop()
         tft.print("tp.x=" + String(tp.x) + " tp.y=" + String(tp.y) + "   ");
     }
 }*/
+
+//void mapXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
+  // most mcufriend have touch (with icons) that extends below the TFT
+  // screens without icons need to reserve a space for "erase"
+  // scale the ADC values from ts.getPoint() to screen values e.g. 0-239
+  //
+  // Calibration is true for PORTRAIT. tp.y is always long dimension 
+  // map to your current pixel orientation
+
+  // convert the values of X and Y from the touch to a 0-320 and 0-240 value (or vice versa)
+  // based on the screen orientation and the calibration settings
+/*  switch (Orientation) {
+    case 0:
+      *mapx = map(touchX, TS_LEFT, TS_RT, 0, tft.width());
+      *mapy = map(touchY, TS_TOP, TS_BOT, 0, tft.height());
+      break;
+    case 1:*/
+      //
+      //
+      // Remove commented sections to be able to change orientation
+      // Hard coded to landscape orientation for the moment
+      //
+      //
+//      *mapx = map(touchY, TS_TOP, TS_BOT, 0, tft.width());
+//      *mapy = map(touchX, TS_RT, TS_LEFT, 0, tft.height());
+/*      break;
+    case 2:
+      *mapx = map(touchX, TS_RT, TS_LEFT, 0, tft.width());
+      *mapy = map(touchY, TS_BOT, TS_TOP, 0, tft.height());
+      break;
+    case 3:
+      *mapx = map(touchY, TS_BOT, TS_TOP, 0, tft.width());
+      *mapy = map(touchX, TS_LEFT, TS_RT, 0, tft.height());
+      break;
+  }*/
+  // Serial.println("x  = " + String(*mapx)  + " y = " + String(*mapy));
+// }
 
 // Other sensors reference:
 // GPS/Speedo - https://how2electronics.com/diy-speedometer-using-gps-module-arduino-oled/
