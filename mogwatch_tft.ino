@@ -15,9 +15,13 @@ MCUFRIEND_kbv tft;       // hard-wired for UNO shields anyway.
 #define ONE_WIRE_BUS 22
 #define WARNING_LED 23
 
+#define TEMP_CHECK_TIME 10    // Number of seconds to wait between checking temperature sensors
+#define NUM_OF_SENSORS  3     
+
 int deviceCount = 0;
 DeviceAddress Thermometer;
 unsigned long time; 
+unsigned long modTime = 50; 
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -154,7 +158,37 @@ void show_splash(void)
     tft.fillScreen(BLACK);
 }
 
-void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour, char label[3]) {
+void update_tempLabel(uint8_t sensor, bool highlightLabel, uint16_t textColour, char text[3]) {
+
+  switch (sensor) {
+  case DISPLAY_ENGINE_DETAILS:
+    draw_tempLabel(47, 16, highlightLabel, textColour, text);     // Engine Label
+    break;
+  case DISPLAY_FL_PORTAL_DETAILS:
+    draw_tempLabel(23, 44, highlightLabel, textColour, text);     // Tyre front passenger
+    break;
+  case DISPLAY_FR_PORTAL_DETAILS:
+    draw_tempLabel(86, 44, highlightLabel, textColour, text);     // Tyre front driver
+    break;
+  case DISPLAY_F_DIFF_DETAILS:
+    draw_tempLabel(20, 85, highlightLabel, textColour, text);     // front diff Label
+    break;
+  case DISPLAY_GEARBOX_DETAILS:
+    draw_tempLabel(50, 120, highlightLabel, textColour, text);    // Gearbox Label
+    break;
+  case DISPLAY_R_DIFF_DETAILS:
+    draw_tempLabel(20, 150, highlightLabel, textColour, text);    // rear diff Label
+    break;
+  case DISPLAY_RL_PORTAL_DETAILS:
+    draw_tempLabel(23, 188, highlightLabel, textColour, text);    // Tyre rear passenger
+    break;
+  case DISPLAY_RR_PORTAL_DETAILS:
+    draw_tempLabel(86, 188, highlightLabel, textColour, text);    // Tyre rear driver
+    break;
+  }
+}
+
+void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour, char text[3]) {
   // If the label is not being highlighted draw white box around white text
   if (!highlightLabel) {
     tft.fillRect(xloc, yloc, 26, 18, WHITE);
@@ -167,13 +201,13 @@ void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour
   }
   tft.setTextColor(textColour);
   //tft.print(F(label));
-  tft.print(label);
+  tft.print(text);
 }
 
 void draw_wheel(int xloc, int yloc, int textBoxOffset, uint16_t tyreColour) {
   tft.drawRoundRect(xloc, yloc, 16, 46, 4, tyreColour);
 
-  draw_tempLabel(xloc+textBoxOffset, yloc+14, false, WHITE, "--\0");
+  // draw_tempLabel(xloc+textBoxOffset, yloc+14, false, WHITE, "--\0");
 }
 
 void draw_diff(int xleftWheel, int xrightWheel, int yloc) {
@@ -200,16 +234,22 @@ void draw_mog4x4chasis(void)
   tft.fillScreen(BLACK);
 
   draw_wheel(20, 30, 3, GREEN);                     // Tyre front passenger
+  update_tempLabel(DISPLAY_FL_PORTAL_DETAILS, false, WHITE, "--\0");
   draw_wheel(99, 30, -13, GREEN);                   // Tyre front driver
+  update_tempLabel(DISPLAY_FR_PORTAL_DETAILS, false, WHITE, "--\0");
   draw_wheel(20, 174, 3, GREEN);                    // Tyre rear passenger
+  update_tempLabel(DISPLAY_RL_PORTAL_DETAILS, false, WHITE, "--\0");
   draw_wheel(99, 174, -13, GREEN);                  // Tyre rear driver
+  update_tempLabel(DISPLAY_RR_PORTAL_DETAILS, false, WHITE, "--\0");
 
   draw_diff(20, 99, 50);                            // Front diff
   draw_diff(20, 99, 194);                           // Rear diff
 
-  draw_tempLabel(20, 85, false, WHITE, "--\0");     // front diff Label
+  // draw_tempLabel(20, 85, false, WHITE, "--\0");     // front diff Label
+  update_tempLabel(DISPLAY_F_DIFF_DETAILS, false, WHITE, "--\0");     // front diff Label
   tft.drawLine(40, 84, 57, 58, WHITE);              // label pointer to front diff
-  draw_tempLabel(20, 150, false, WHITE, "--\0");    // rear diff Label
+  // draw_tempLabel(20, 150, false, WHITE, "--\0");    // rear diff Label
+  update_tempLabel(DISPLAY_F_DIFF_DETAILS, false, WHITE, "--\0");    // rear diff Label
   tft.drawLine(40, 169, 57, 192, WHITE);            // label pointer to rear diff
 
   // Tail shafts
@@ -223,13 +263,16 @@ void draw_mog4x4chasis(void)
   tft.fillRect(59, 91, 12, 20, BLACK);
 
   // Gearbox Label
-  draw_tempLabel(50, 120, false, WHITE, "--\0");
-
+  // draw_tempLabel(50, 120, false, WHITE, "--\0");
+  update_tempLabel(DISPLAY_ENGINE_DETAILS, false, WHITE, "--\0");
+  
   // Engine
   tft.drawRect(60, 10, 27, 30, GREEN);
 
   // Engine Label
-  draw_tempLabel(47, 16, false, WHITE, "--\0");
+  // draw_tempLabel(47, 16, false, WHITE, "--\0");
+  update_tempLabel
+  (DISPLAY_GEARBOX_DETAILS, false, WHITE, "--\0");
 
   // Drive shaft
   tft.drawRect(74, 40, 6, 53, GREEN);
@@ -371,7 +414,7 @@ void showDetails(int detailSummary, float displayTemp) {
   Serial.println("x  = " + String(currentDetails));
   if (currentDetails !=  detailSummary) {
     // clear the area where the text will be displayed
-    tft.fillRect(120, 80, 240, 80, BLACK);
+    tft.fillRect(120, 80, 240, 160, RED);
 
     currentDetails = detailSummary;
 
@@ -414,46 +457,54 @@ void showDetails(int detailSummary, float displayTemp) {
 float getTemps(void) {
   float tempC;
   bool warningLEDon = false;
+  unsigned long tempTime;
 
-   Serial.print("Time1:"); time = millis(); Serial.println(time); 
+  time = millis(); 
+  
+  // Get the MOD seconds for time and only do the temperature check every TEMP_CHECK_TIME (10) seconds
+  tempTime = (time / 1000) % TEMP_CHECK_TIME;
+
+  if (tempTime >= modTime) {
+    modTime = tempTime; 
+  } else {
+    modTime = 0;
+    Serial.println("Checking temps");
 
     // if sharing pins, you'll need to fix the directions of the touchscreen pins
     // pinMode(XM, OUTPUT);
     // pinMode(YP, OUTPUT);
 
     // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
-  sensors.requestTemperatures(); 
+    sensors.requestTemperatures(); 
 
-  // Serial.print("TimerT:"); time = millis();Serial.println(time); 
+    // Serial.print("TimerT:"); time = millis();Serial.println(time); 
 
-  // Display temperature from each sensor
-  for (int i = 0;  i < deviceCount;  i++)
-  {
+    // Display temperature from each sensor
+    for (int i = 0;  i < deviceCount;  i++)
+    {
       // Serial.print("TimeS:"); time = millis();Serial.println(time); 
-    Serial.print("Sensor ");
-    Serial.print(i+1);
-    Serial.print(" : ");
-    sensors.getAddress(Thermometer, i);
-    tempC = sensors.getTempCByIndex(i);
-    Serial.print(tempC,1);
-    Serial.print("c  |  ");
+      // Serial.print("Sensor ");
+      // Serial.print(i+1);
+      // Serial.print(" : ");
+      sensors.getAddress(Thermometer, i);
+      tempC = sensors.getTempCByIndex(i);
+      // Serial.print(tempC,1);
+      // Serial.print("c  |  ");
 
-    // Turn on the Warning LED if the temp is greater than 24c
-    if (tempC > 24 && !warningLEDon) {
-      warningLEDon = true;
+      // Turn on the Warning LED if the temp is greater than 24c
+      if (tempC > 24 && !warningLEDon) {
+        warningLEDon = true;
+      }
     }
-  }
 
-  Serial.print("Time3:"); time = millis();Serial.println(time); 
+    if (warningLEDon) {
+      // Turn on the High temp LED  
+      digitalWrite(WARNING_LED, HIGH);
+    } else {
+      // Turn off the High temp LED
+      digitalWrite(WARNING_LED, LOW);
+    }
 
-  // Serial.println();
-
-  if (warningLEDon) {
-    // Turn on the High temp LED  
-    digitalWrite(WARNING_LED, HIGH);
-  } else {
-    // Turn off the High temp LED
-    digitalWrite(WARNING_LED, LOW);
   }
 
   return tempC;
@@ -468,6 +519,8 @@ void loop()
 
     // modify loop to get temps less frequently - every 5-10 seconds
     aTemp = getTemps();
+
+    // Display temps (only if changed)
 
     tp = ts.getPoint();   //tp.x, tp.y are ADC values
 
