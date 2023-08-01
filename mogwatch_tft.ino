@@ -33,7 +33,7 @@ struct Sensor {
   uint8_t slot;
   DeviceAddress addr;
   uint8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
-  char name[10];
+  char name[11]; // 10 characters + '\0'
   uint8_t warn;
   uint8_t alarm;
   bool relativeToAmbient; // allows warn and alarm thresholds to be set relative to ambient temp (for portals/Diffs/engine/gearbox?)
@@ -65,6 +65,8 @@ TSPoint tp;
 #define MAXPRESSURE 1000
 
 #define CHASSIS_AREA 120    // This is the area which the chassis is drawn in for touch references
+#define LABEL_2CHAR_WIDTH 26
+#define LABEL_HEIGHT      18
 
 int currentDetails = 0;
 #define DISPLAY_ENGINE_DETAILS      1      // probably should change to SENSOR_ENGINE
@@ -159,41 +161,41 @@ void show_splash(void)
 }
 
 void update_tempLabel(uint8_t sensor, bool highlightLabel, uint16_t textColour, char text[3]) {
-
   switch (sensor) {
-  case DISPLAY_ENGINE_DETAILS:
-    draw_tempLabel(47, 16, highlightLabel, textColour, text);     // Engine Label
-    break;
-  case DISPLAY_FL_PORTAL_DETAILS:
-    draw_tempLabel(23, 44, highlightLabel, textColour, text);     // Tyre front passenger
-    break;
-  case DISPLAY_FR_PORTAL_DETAILS:
-    draw_tempLabel(86, 44, highlightLabel, textColour, text);     // Tyre front driver
-    break;
-  case DISPLAY_F_DIFF_DETAILS:
-    draw_tempLabel(20, 85, highlightLabel, textColour, text);     // front diff Label
-    break;
-  case DISPLAY_GEARBOX_DETAILS:
-    draw_tempLabel(50, 120, highlightLabel, textColour, text);    // Gearbox Label
-    break;
-  case DISPLAY_R_DIFF_DETAILS:
-    draw_tempLabel(20, 150, highlightLabel, textColour, text);    // rear diff Label
-    break;
-  case DISPLAY_RL_PORTAL_DETAILS:
-    draw_tempLabel(23, 188, highlightLabel, textColour, text);    // Tyre rear passenger
-    break;
-  case DISPLAY_RR_PORTAL_DETAILS:
-    draw_tempLabel(86, 188, highlightLabel, textColour, text);    // Tyre rear driver
-    break;
+    case DISPLAY_ENGINE_DETAILS:
+      draw_tempLabel(47, 16, highlightLabel, textColour, text);     // Engine Label
+      break;
+    case DISPLAY_FL_PORTAL_DETAILS:
+      draw_tempLabel(23, 44, highlightLabel, textColour, text);     // Tyre front passenger
+      break;
+    case DISPLAY_FR_PORTAL_DETAILS:
+      draw_tempLabel(86, 44, highlightLabel, textColour, text);     // Tyre front driver
+      break;
+    case DISPLAY_F_DIFF_DETAILS:
+      draw_tempLabel(20, 85, highlightLabel, textColour, text);     // front diff Label
+      break;
+    case DISPLAY_GEARBOX_DETAILS:
+      draw_tempLabel(50, 120, highlightLabel, textColour, text);    // Gearbox Label
+      break;
+    case DISPLAY_R_DIFF_DETAILS:
+      draw_tempLabel(20, 150, highlightLabel, textColour, text);    // rear diff Label
+      break;
+    case DISPLAY_RL_PORTAL_DETAILS:
+      draw_tempLabel(23, 188, highlightLabel, textColour, text);    // Tyre rear passenger
+      break;
+    case DISPLAY_RR_PORTAL_DETAILS:
+      draw_tempLabel(86, 188, highlightLabel, textColour, text);    // Tyre rear driver
+      break;
   }
 }
 
 void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour, char text[3]) {
   // If the label is not being highlighted draw white box around white text
+
   if (!highlightLabel) {
-    tft.fillRect(xloc, yloc, 26, 18, WHITE);
+    tft.fillRect(xloc, yloc, LABEL_2CHAR_WIDTH, LABEL_HEIGHT, WHITE);
   }
-  tft.fillRect(xloc+1, yloc+1, 24, 16, BLACK);
+  tft.fillRect(xloc+1, yloc+1, LABEL_2CHAR_WIDTH-2, LABEL_HEIGHT-2, BLACK);
   tft.setCursor(xloc+2, yloc+2);
   tft.setTextSize(2);
   if (highlightLabel) {
@@ -204,53 +206,38 @@ void draw_tempLabel(int xloc, int yloc, bool highlightLabel, uint16_t textColour
   tft.print(text);
 }
 
-void draw_wheel(int xloc, int yloc, int textBoxOffset, uint16_t tyreColour) {
+void draw_wheel(int xloc, int yloc, uint16_t tyreColour) {
   tft.drawRoundRect(xloc, yloc, 16, 46, 4, tyreColour);
-
-  // draw_tempLabel(xloc+textBoxOffset, yloc+14, false, WHITE, "--\0");
 }
 
 void draw_diff(int xleftWheel, int xrightWheel, int yloc) {
-  xleftWheel+=30;
-
   //.  __/-\___ shape
-  tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
-  tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc-4, GREEN);
-  tft.drawLine(xleftWheel+9, yloc-4, xleftWheel+15, yloc-4, GREEN); // ??? remove if bottom diff???
-  tft.drawLine(xleftWheel+15, yloc-4, xleftWheel+19, yloc, GREEN);
-  tft.drawLine(xleftWheel+19, yloc, xrightWheel-13, yloc, GREEN);
+  tft.drawLine(xleftWheel, yloc, xleftWheel+18, yloc, GREEN);
+  tft.drawLine(xleftWheel+18, yloc, xleftWheel+22, yloc-4, GREEN);
+  tft.drawLine(xleftWheel+22, yloc-4, xleftWheel+28, yloc-4, GREEN);
+  tft.drawLine(xleftWheel+28, yloc-4, xleftWheel+32, yloc, GREEN);
+  tft.drawLine(xleftWheel+32, yloc, xrightWheel, yloc, GREEN);
 
   yloc+=6;
   //.  --\_/--- shape
-  tft.drawLine(xleftWheel, yloc, xleftWheel+5, yloc, GREEN);
-  tft.drawLine(xleftWheel+5, yloc, xleftWheel+9, yloc+4, GREEN);
-  tft.drawLine(xleftWheel+9, yloc+4, xleftWheel+15, yloc+4, GREEN); // ??? remove if top diff???
-  tft.drawLine(xleftWheel+15, yloc+4, xleftWheel+19, yloc, GREEN);
-  tft.drawLine(xleftWheel+19, yloc, xrightWheel-13, yloc, GREEN);
+  tft.drawLine(xleftWheel, yloc, xleftWheel+18, yloc, GREEN);
+  tft.drawLine(xleftWheel+18, yloc, xleftWheel+22, yloc+4, GREEN);
+  tft.drawLine(xleftWheel+22, yloc+4, xleftWheel+28, yloc+4, GREEN);
+  tft.drawLine(xleftWheel+28, yloc+4, xleftWheel+32, yloc, GREEN);
+  tft.drawLine(xleftWheel+32, yloc, xrightWheel, yloc, GREEN);
 }
 
-void draw_mog4x4chasis(void)
+void draw_mog4x4chasis(bool includeBlankLabels = true)
 {
-  tft.fillScreen(BLACK);
+  // draw front axle and wheels
+  draw_wheel(20, 30, GREEN);        // Tyre front passenger
+  draw_diff(36, 99, 50);            // Front diff
+  draw_wheel(99, 30, GREEN);        // Tyre front driver
 
-  draw_wheel(20, 30, 3, GREEN);                     // Tyre front passenger
-  update_tempLabel(DISPLAY_FL_PORTAL_DETAILS, false, WHITE, "--\0");
-  draw_wheel(99, 30, -13, GREEN);                   // Tyre front driver
-  update_tempLabel(DISPLAY_FR_PORTAL_DETAILS, false, WHITE, "--\0");
-  draw_wheel(20, 174, 3, GREEN);                    // Tyre rear passenger
-  update_tempLabel(DISPLAY_RL_PORTAL_DETAILS, false, WHITE, "--\0");
-  draw_wheel(99, 174, -13, GREEN);                  // Tyre rear driver
-  update_tempLabel(DISPLAY_RR_PORTAL_DETAILS, false, WHITE, "--\0");
-
-  draw_diff(20, 99, 50);                            // Front diff
-  draw_diff(20, 99, 194);                           // Rear diff
-
-  // draw_tempLabel(20, 85, false, WHITE, "--\0");     // front diff Label
-  update_tempLabel(DISPLAY_F_DIFF_DETAILS, false, WHITE, "--\0");     // front diff Label
-  tft.drawLine(40, 84, 57, 58, WHITE);              // label pointer to front diff
-  // draw_tempLabel(20, 150, false, WHITE, "--\0");    // rear diff Label
-  update_tempLabel(DISPLAY_F_DIFF_DETAILS, false, WHITE, "--\0");    // rear diff Label
-  tft.drawLine(40, 169, 57, 192, WHITE);            // label pointer to rear diff
+  // draw rear axle and wheels
+  draw_wheel(20, 174, GREEN);       // Tyre rear passenger
+  draw_diff(36, 99, 194);           // Rear diff
+  draw_wheel(99, 174, GREEN);       // Tyre rear driver
 
   // Tail shafts
   tft.drawRect(59, 60, 6, 131, GREEN);
@@ -262,34 +249,27 @@ void draw_mog4x4chasis(void)
   tft.fillRect(54, 86, 16, 39, BLACK);
   tft.fillRect(59, 91, 12, 20, BLACK);
 
-  // Gearbox Label
-  // draw_tempLabel(50, 120, false, WHITE, "--\0");
-  update_tempLabel(DISPLAY_ENGINE_DETAILS, false, WHITE, "--\0");
-  
   // Engine
   tft.drawRect(60, 10, 27, 30, GREEN);
-
-  // Engine Label
-  // draw_tempLabel(47, 16, false, WHITE, "--\0");
-  update_tempLabel
-  (DISPLAY_GEARBOX_DETAILS, false, WHITE, "--\0");
 
   // Drive shaft
   tft.drawRect(74, 40, 6, 53, GREEN);
   tft.fillRect(75, 40, 4, 52, BLACK);
 
-  // Label positions y/height for touch selection (start = y and end = y+18):
-  // Engine          10 - 28
-  //      36
-  // Front portals   44 - 62
-  //      74
-  // Front diff      85 - 103
-  //      111
-  // Gearbox        120 - 138
-  //      144
-  // Rear diff      150 - 168
-  //      178
-  // Rear portals   188 - 206
+  if (includeBlankLabels) {
+    // Labels
+    update_tempLabel(DISPLAY_ENGINE_DETAILS, false, WHITE, "--\0");
+    update_tempLabel(DISPLAY_FL_PORTAL_DETAILS, false, WHITE, "--\0");
+    update_tempLabel(DISPLAY_FR_PORTAL_DETAILS, false, WHITE, "--\0");
+    update_tempLabel(DISPLAY_GEARBOX_DETAILS, false, WHITE, "--\0");
+    update_tempLabel(DISPLAY_RL_PORTAL_DETAILS, false, WHITE, "--\0");
+    update_tempLabel(DISPLAY_RR_PORTAL_DETAILS, false, WHITE, "--\0");
+
+    update_tempLabel(DISPLAY_F_DIFF_DETAILS, false, WHITE, "--\0");     // front diff Label
+    tft.drawLine(40, 84, 57, 58, WHITE);              // label pointer to front diff
+    update_tempLabel(DISPLAY_R_DIFF_DETAILS, false, WHITE, "--\0");    // rear diff Label
+    tft.drawLine(40, 169, 57, 192, WHITE);            // label pointer to rear diff
+  }
 }
 
 void printAddress(DeviceAddress deviceAddress)
@@ -304,7 +284,32 @@ void printAddress(DeviceAddress deviceAddress)
   Serial.println("");
 }
 
+void clearEEProm() {
+   // initialize the LED pin as an output.
+   pinMode(WARNING_LED, OUTPUT);
+
+   for (int i = 0 ; i < EEPROM.length() ; i++) {
+      EEPROM.write(i, 0);
+   }
+
+   // turn the LED on when we're done
+   digitalWrite(WARNING_LED, HIGH);
+   delay(500);
+   digitalWrite(WARNING_LED, LOW);
+}
+
 void loadSensorsFromEEPROM(void) {
+  // EEPROM structure
+  // X -  first 2 character record the number of saves sensors (uint8_t - range 0-255)
+  // [SDDDDDDDDTNNNNNNNNNNNWAR] (total bytes = 24) repeat the number of sensors that are saved
+  //  S - Slot - the position of the sensor on the vehicle
+  //   DDDDDDDD - Device Address of the sensor stored
+  //           T - Type ... Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
+  //            NNNNNNNNNNN - Name/Label (11 characters = 10 + '\0')
+  //                       W - Warning level threshold - 255 means don't warn
+  //                        A - Alert level threshold - 255 means don't alert
+  //                         R - true/false ... Warnings/Alert levels relative to ambient temp. eg. true W=40 and amb temp = 25 .. warn at 65
+
   int eeAddress = 0;
   uint8_t numSensors;
 
@@ -319,6 +324,10 @@ void loadSensorsFromEEPROM(void) {
   // Might need to use addresses for the sensors when there are lots?!?
   for (int i = 0;  i < deviceCount;  i++) {
     sensors.getAddress(Thermometer, i);
+
+    // Check each device address in the EEProm
+    // If devcie address is in EEProm then load into the sensor array - does it need to be marked as present and then load present EEProms into array and warn of other
+    // If not, add sensor to EEProm and then load into the sensor array
   }
 
   // Reset EEProm
@@ -359,8 +368,6 @@ void loadSensorsFromEEPROM(void) {
 void setupTempSensors(void) {
   // initialize digital pin 10 as an output for LED warning light
   pinMode(WARNING_LED, OUTPUT);
-
-  // DeviceAddress Thermometer;
   
   // Start up the DallasTemp library
   sensors.begin();
@@ -385,8 +392,6 @@ void setupTempSensors(void) {
 
 void setup(void)
 {
-    // uint16_t tmp;
-
     tft.reset();
     TFT_ID = tft.readID();
     tft.begin(TFT_ID);
@@ -394,12 +399,15 @@ void setup(void)
     tft.fillScreen(BLACK);
 
     Serial.begin(9600);
-    show_Serial();
+    // show_Serial();
+
     setupTempSensors();
+    // clearEEProm(); // Reset EEProm memory to forget all sensors (might need to just clear out the number of sensors instead - quicker)
     loadSensorsFromEEPROM();
 
     // show_splash();
-    draw_mog4x4chasis();
+    tft.fillScreen(BLACK);
+    draw_mog4x4chasis(false);
 }
 
 void mapLandscapeXYvalues(int touchX, int touchY, int* mapx, int* mapy) {
@@ -541,6 +549,18 @@ void loop()
       if (xpos < CHASSIS_AREA) {                                     // TODO: work out the chasis touch area and define in variable
           // this is within the chasis touch area
 
+            // Label positions y/height for touch selection (start = y and end = y+18):
+            // Engine          10 - 28
+            //      36
+            // Front portals   44 - 62
+            //      74
+            // Front diff      85 - 103
+            //      111
+            // Gearbox        120 - 138
+            //      144
+            // Rear diff      150 - 168
+            //      178
+            // Rear portals   188 - 206
           if (ypos < 36) {
             // Engine Area
             detailArea = DISPLAY_ENGINE_DETAILS;
