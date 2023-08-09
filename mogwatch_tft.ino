@@ -10,6 +10,7 @@ MCUFRIEND_kbv tft;       // hard-wired for UNO shields anyway.
 #include <EEPROM.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "SensorDefaults.h"
 
 // Data wire is conntec to the Arduino digital pin 4
 #define ONE_WIRE_BUS 22
@@ -31,24 +32,21 @@ DallasTemperature sensors(&oneWire);
 
 struct Sensor {
   uint8_t slot;
-  DeviceAddress addr;
+  DeviceAddress address;
   uint8_t type;  // Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
   char name[11]; // 10 characters + '\0'
   uint8_t warn;
-  uint8_t alarm;
+  uint8_t alert;
   bool relativeToAmbient; // allows warn and alarm thresholds to be set relative to ambient temp (for portals/Diffs/engine/gearbox?)
 };
 // https://forum.expeditionportal.com/threads/unimog-hub-temperatures.191531/ (Reference for portals ambient + 20c)
 
 // The different components that Temperature Sensors can monitor
-#define PORTAL    1 // Front Left, Front Right, Rear Left & Rear Right - should be relative to ambient temp
-#define ENGINE    2 // should NOT be relative to ambient temp???
-#define GEARBOX   3 // should be relative to ambient temp
-#define DIFF      4 // Front & Rear (& Rear2 for 6wd varient) - should be relative to ambient temp
-#define AIR       5 // Cabin & Ambient - should not have warn or alarm levels set by default
-
-// Default config for the various component sensors
-
+#define PORTAL    0 // Front Left, Front Right, Rear Left & Rear Right - should be relative to ambient temp
+#define ENGINE    1 // should NOT be relative to ambient temp???
+#define GEARBOX   2 // should be relative to ambient temp
+#define DIFF      3 // Front & Rear (& Rear2 for 6wd varient) - should be relative to ambient temp
+#define AIR       4 // Cabin & Ambient - should not have warn or alarm levels set by default
 
 //char *name = "Please Calibrate.";  //edit name of shield
 char *name = "2.8 touch tft";
@@ -302,6 +300,11 @@ void loadSensorsFromEEPROM(void) {
   // EEPROM structure
   // X -  first 2 character record the number of saves sensors (uint8_t - range 0-255)
   // [SDDDDDDDDTNNNNNNNNNNNWAR] (total bytes = 24) repeat the number of sensors that are saved
+  //                         [SDDDDDDDDTNNNNNNNNNNNWAR]
+  //                                                 [SDDDDDDDDTNNNNNNNNNNNWAR]
+  // 012
+  //    345678901234567890123456 2+(1x24)=26
+  //                            789012345678901234567890 2+(2x24)=26
   //  S - Slot - the position of the sensor on the vehicle
   //   DDDDDDDD - Device Address of the sensor stored
   //           T - Type ... Portal = 1 (ambient + 20c) , Engine = 2, Gearbox = 3, Diff = 4, Air = 5 (no warn/alarm)
@@ -310,10 +313,13 @@ void loadSensorsFromEEPROM(void) {
   //                        A - Alert level threshold - 255 means don't alert
   //                         R - true/false ... Warnings/Alert levels relative to ambient temp. eg. true W=40 and amb temp = 25 .. warn at 65
 
+// sensor = (Sensor){1, "SENSOR123\0", 50, 70};
+
   int eeAddress = 0;
   uint8_t numSensors;
-
-  struct Sensor sensor;
+  // struct 
+  Sensor sensor;
+  bool newSensorFound;
 
   // Start up the DallasTemp library
   sensors.begin();
@@ -321,47 +327,111 @@ void loadSensorsFromEEPROM(void) {
   // locate devices on the bus
   deviceCount = sensors.getDeviceCount();
 
+  Serial.println("devices");
+  Serial.println(deviceCount);
+
   // Might need to use addresses for the sensors when there are lots?!?
   for (int i = 0;  i < deviceCount;  i++) {
+    newSensorFound = true;
+    DeviceAddress devAddr;
+
     sensors.getAddress(Thermometer, i);
 
+    printAddress(Thermometer);
+
     // Check each device address in the EEProm
-    // If devcie address is in EEProm then load into the sensor array - does it need to be marked as present and then load present EEProms into array and warn of other
+    // If devcie address is in EEProm then load into the sensor array - does it need to be marked as present and then load present EEProms into array and warn of others
     // If not, add sensor to EEProm and then load into the sensor array
+
+    EEPROM.get(eeAddress, numSensors);
+
+    // Search for current device address in the EEprom
+    for (int j = 0; j < numSensors; j++) {
+
+      
+      int eeDeviceLocation = 2 + (j * sizeof(Sensor)); // "2" shoulkd be the position of the first DeviceAddress if there is one recorded
+      EEPROM.get(eeDeviceLocation, devAddr);
+
+      if (Thermometer == devAddr) {
+        newSensorFound = false;
+        break;
+      }
+
+      Serial.println(j);
+
+    }
+
+    if (newSensorFound) {
+      // Display screen to see if user wants to save new sensor to the EEProm
+      Serial.println("New sensor found");
+      printAddress(devAddr);
+
+        // #define DISPLAY_ENGINE_DETAILS      1      // probably should change to SENSOR_ENGINE
+        // #define DISPLAY_FL_PORTAL_DETAILS   2
+        // #define DISPLAY_FR_PORTAL_DETAILS   3
+      // sensor.slot = DISPLAY_ENGINE_DETAILS;
+      // sensor.address = devAddr;
+      // sensor.type = ENGINE;
+      // sensor.name = "ENGINE\0";
+      // sensor.warn = sensorDef[ENGINE].warn;
+      // sensor.alert = sensorDef[ENGINE].alert;
+      // sensor.relativeToAmbient = sensorDef[ENGINE].relativeToAmbient;
+      // sensor = (Sensor){.slot = DISPLAY_ENGINE_DETAILS, .address = devAddr, .type = ENGINE, .warn = sensorDef[ENGINE].warn, .alert = sensorDef[ENGINE].alert, .relativeToAmbient =  sensorDef[ENGINE].relativeToAmbient};
+      sensor.slot = DISPLAY_ENGINE_DETAILS;
+      // sensor.address = devAddr;
+      sensor.type = ENGINE;
+      sensor.warn = sensorDef[ENGINE].warn;
+      sensor.alert = sensorDef[ENGINE].alert;
+      sensor.relativeToAmbient =  sensorDef[ENGINE].relativeToAmbient;
+      // sensor = (Sensor){.slot = DISPLAY_ENGINE_DETAILS, .address = devAddr, .type = ENGINE, .warn = sensorDef[ENGINE].warn, .alert = sensorDef[ENGINE].alert, .relativeToAmbient =  sensorDef[ENGINE].relativeToAmbient};
+      // (Sensor)
+      sensor.name = "ENGINE...\0";
+
+      // get number of sensors recorded in EEProm currently
+      eeAddress = 0;
+      EEPROM.get(eeAddress, numSensors);
+
+      EEPROM.put(eeAddress, numSensors + 1);
+
+      // point EEProm address to after the last current sensor
+      eeAddress = (numSensors * sizeof(Sensor)) + 1;
+
+      EEPROM.put(eeAddress, sensor);
+    }
   }
 
-  // Reset EEProm
-  numSensors = 0;
-  // EEPROM.put(eeAddress, numSensors);
+  // // Reset EEProm
+  // numSensors = 0;
+  // // EEPROM.put(eeAddress, numSensors);
 
-  EEPROM.get(eeAddress, numSensors);
+  // EEPROM.get(eeAddress, numSensors);
 
-  if (numSensors == 0) {
-    Serial.println("No EEProm sensors recorded");
+  // if (numSensors == 0) {
+  //   Serial.println("No EEProm sensors recorded");
 
-    // add one for testing purposes
-    numSensors = 1;
-    EEPROM.put(eeAddress, numSensors);
+  //   // add one for testing purposes
+  //   numSensors = 1;
+  //   EEPROM.put(eeAddress, numSensors);
 
-    eeAddress += sizeof(numSensors);
-    // DeviceAddress dummyDevAddr;
-    // DeviceAddress newAddress = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
-    // for (int i = 0; i < 8; i++) dummyDevAddr[i] = newAddress[i];
+  //   eeAddress += sizeof(numSensors);
+  //   // DeviceAddress dummyDevAddr;
+  //   // DeviceAddress newAddress = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
+  //   // for (int i = 0; i < 8; i++) dummyDevAddr[i] = newAddress[i];
     
-    // DeviceAddress dummyDevAddr = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
+  //   // DeviceAddress dummyDevAddr = { 0x28, 0x2A, 0x3A, 0x59, 0x04, 0x00, 0x00, 0x8B };
 
-    // sensor = (Sensor){1, dummyDevAddr, "SENSOR123\0", 50, 70};
-    sensor = (Sensor){1, "SENSOR123\0", 50, 70};
+  //   // sensor = (Sensor){1, dummyDevAddr, "SENSOR123\0", 50, 70};
+  //   sensor = (Sensor){1, "SENSOR123\0", 50, 70};
 
-    EEPROM.put(eeAddress, sensor);
-  } else {
-    Serial.println(String(numSensors)  + " EEProm sensors recorded");
+  //   EEPROM.put(eeAddress, sensor);
+  // } else {
+  //   Serial.println(String(numSensors)  + " EEProm sensors recorded");
 
-    eeAddress += sizeof(numSensors);
-    EEPROM.get(eeAddress, sensor);
-    Serial.print(String(sensor.slot)  + " " + sensor.name + " " + sensor.warn + " " + sensor.alarm);
-    // printAddress(sensor.addr);
-  }
+  //   eeAddress += sizeof(numSensors);
+  //   EEPROM.get(eeAddress, sensor);
+  //   Serial.print(String(sensor.slot)  + " " + sensor.name + " " + sensor.warn + " " + sensor.alarm);
+  //   // printAddress(sensor.addr);
+  // }
 
 }
 
@@ -476,7 +546,7 @@ float getTemps(void) {
     modTime = tempTime; 
   } else {
     modTime = 0;
-    Serial.println("Checking temps");
+    // Serial.println("Checking temps");
 
     // if sharing pins, you'll need to fix the directions of the touchscreen pins
     // pinMode(XM, OUTPUT);
