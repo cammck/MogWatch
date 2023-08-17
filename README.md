@@ -4,6 +4,7 @@ Auto sensor arduino project aimed at monitoring Mercedes Benz Unimog vital telem
 Initially intended to be used to monitor the following (and alert when threshold breached):
 - portal temps (x4)
 - engine temp
+- brake calipers (x6)
 - radiator/cooling temp (is this any different from engine temp?)
 - transmission temp
 - diff temp (2)
@@ -14,10 +15,15 @@ Additionally, to assess other possible sensors
 - Cabin temp?
 - air pressures?
 
-# Depemdencies
+# Folders
+Simple2LineLCD - Simple Arduino Uno sketch to connect multiple OneWire DS18B20 temperature sensors and display on a simple 2 line LCD screen.
+TFTLcdWithTouch - Arduino Mega sketch to show graphic details of UniMog chassis and associated sensor values ... and sensor details with simple time series bar graph.
+
+# Dependencies
 LiquidCrystal_I2C - for 16x2 LCD with I2C wiring interface
 OneWire - for use with 1 wire temp sensors
 DallasTemperature - to read temps from 1 wire sensor array
+TouchScreen - to integrate with Jaycar LCD Touch screen shield/hat
 
 # Phases
 Phase.1
